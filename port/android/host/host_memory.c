@@ -29,6 +29,7 @@ passed on to the previous handler.
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
 #include <ucontext.h>
 #include <unistd.h>
 
@@ -117,10 +118,22 @@ corrupt it where failing to start is at least clear. */
 it cannot tell */
 static int range_unused(uint64_t from, uint64_t to)
 {
-	FILE *pagemap = fopen("/proc/self/pagemap", "rb");
+	FILE *pagemap;
 	uint64_t entries[512];
 	uint64_t page = from / PAGE;
 	int unused = 1;
+	/* A release (non-debuggable) app runs with PR_SET_DUMPABLE 0, which makes
+	the kernel give its /proc/self files to root; pagemap is mode 0400, so
+	the app cannot open its own and this check would always give up. Make the
+	process dumpable only for the open (permission is checked there, the
+	descriptor stays valid afterward) and put it back. */
+	int was_dumpable = prctl(PR_GET_DUMPABLE, 0, 0, 0, 0);
+
+	if (was_dumpable == 0)
+		prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+	pagemap = fopen("/proc/self/pagemap", "rb");
+	if (was_dumpable == 0)
+		prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
 
 	if (!pagemap)
 		return 0;
