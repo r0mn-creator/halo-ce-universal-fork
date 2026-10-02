@@ -115,11 +115,10 @@ static unsigned char paeth(unsigned char left, unsigned char up, unsigned char u
 
 /* the PNG's texels, RGBA in rows top first; NULL if it is not one that
 tools/hud_assets.py writes */
-static unsigned char *png_decode(const struct hud_hires_embedded *embedded)
+unsigned char *hud_hires_png_decode(const unsigned char *data, unsigned long size,
+	unsigned long width, unsigned long height)
 {
-	const unsigned char *data = (const unsigned char *)embedded->png;
-	unsigned long size = embedded->png_size, position = 8;
-	unsigned long width = embedded->width, height = embedded->height;
+	unsigned long position = 8;
 	unsigned long stride = width * 4, filtered_size = height * (stride + 1);
 	unsigned char *compressed = NULL, *filtered = NULL, *pixels = NULL;
 	unsigned long compressed_size = 0, row, column;
@@ -193,6 +192,12 @@ failed:
 	free(filtered);
 	free(pixels);
 	return NULL;
+}
+
+static unsigned char *png_decode(const struct hud_hires_embedded *embedded)
+{
+	return hud_hires_png_decode((const unsigned char *)embedded->png, embedded->png_size,
+		embedded->width, embedded->height);
 }
 
 unsigned int hud_hires_override_texture(long asset, unsigned long *levels)

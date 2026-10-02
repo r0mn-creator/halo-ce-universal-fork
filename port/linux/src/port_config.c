@@ -87,6 +87,11 @@ static const struct config_setting config_settings[] =
 		"waypoints, scopes) from the high-res assets (8x the maps' bitmaps);\n"
 		"false draws the maps' own bitmaps." },
 
+	{ "display.texture_pack", _config_boolean, "true", "HALO_TEXTURE_PACK", _environment_value, _platform_all,
+		"Draw the maps' bitmaps from the texture pack in the data folder's\n"
+		"texture_pack folder (tools/texture_pack.py), where it has them;\n"
+		"false draws the maps' own bitmaps." },
+
 	{ "audio.enabled", _config_boolean, "true", "HALO_NO_AUDIO", _environment_set_is_false, _platform_all,
 		"Play sound." },
 	{ "audio.volume", _config_real, "1.0", "HALO_VOLUME", _environment_value, _platform_all,

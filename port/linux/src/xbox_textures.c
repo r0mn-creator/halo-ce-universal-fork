@@ -16,6 +16,7 @@ memory_watch.c detects that by write-protecting the pages.
 
 #include "xgpu.h"
 #include "hud_hires.h"
+#include "texture_pack.h"
 #include "port_config.h"
 
 #include <stdio.h>
@@ -654,6 +655,8 @@ struct texture_entry
 	unsigned long last_used_frame;
 	/* the high-res HUD texture drawn in its place (hud_hires.h), or -1 */
 	long override;
+	/* the texture pack's texture drawn in its place (texture_pack.h), or -1 */
+	long pack;
 };
 
 #define TEXTURE_BUCKET_COUNT 4096
@@ -711,6 +714,16 @@ static GLuint texture_entry_result(struct texture_entry *entry, GLenum *target,
 		{
 			description->hires = TRUE;
 			description->hires_coverage = hud_hires_override_coverage(entry->override);
+			return texture;
+		}
+	}
+	else if (entry->pack >= 0)
+	{
+		GLuint texture = texture_pack_texture(entry->pack, &description->levels);
+
+		if (texture)
+		{
+			description->hires = TRUE;
 			return texture;
 		}
 	}
@@ -775,6 +788,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 		entry->size = xgpu_texture_face_size(&entry->description) * (entry->description.cube_map ? 6 : 1);
 		entry->generation = 0;
 		entry->override = -1;
+		entry->pack = -1;
 		glGenTextures(1, &entry->texture);
 		entry->next = *bucket;
 		*bucket = entry;
@@ -792,15 +806,24 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 			entry->generation = 1;
 		/* (which bitmap is here may have changed with the pixels) */
 		entry->override = -1;
+		entry->pack = -1;
 		if (!palettized && !entry->description.cube_map && entry->description.depth == 1)
 		{
 			unsigned long levels;
+			unsigned long level0_size = entry->description.levels > 1 ?
+				xgpu_texture_level_offset(&entry->description, 1) : xgpu_texture_face_size(&entry->description);
 
 			entry->override = hud_hires_override_find(entry->address, entry->description.width,
-				entry->description.height, entry->description.levels > 1 ?
-				xgpu_texture_level_offset(&entry->description, 1) : xgpu_texture_face_size(&entry->description));
+				entry->description.height, level0_size);
 			if (entry->override >= 0 && !hud_hires_override_texture(entry->override, &levels))
 				entry->override = -1;
+			if (entry->override < 0)
+			{
+				entry->pack = texture_pack_find(entry->address, entry->description.width,
+					entry->description.height, level0_size);
+				if (entry->pack >= 0 && !texture_pack_texture(entry->pack, &levels))
+					entry->pack = -1;
+			}
 		}
 		if (entry->override < 0 && platform_is_contiguous((void *)entry->address) &&
 			platform_is_contiguous((void *)(entry->address + entry->size - 1)))
@@ -836,11 +859,31 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 	return texture_entry_result(entry, target, description);
 }
 
+/* every cached bitmap is looked up (hud and pack) and uploaded again the next time it is drawn */
+static void texture_cache_invalidate_all(void)
+{
+	unsigned long index;
+
+	for (index = 0; index < TEXTURE_BUCKET_COUNT; index++)
+	{
+		struct texture_entry *entry;
+
+		for (entry = texture_buckets[index]; entry; entry = entry->next)
+		{
+			entry->generation = 0;
+			entry->pack = -1;
+		}
+	}
+	texture_drop_serial++;
+}
+
 void xgpu_texture_cache_begin_frame(void)
 {
 	unsigned long index;
 
 	texture_frame++;
+	if (texture_pack_control_poll())
+		texture_cache_invalidate_all();
 	if (texture_frame % 600)
 		return;
 	/* drop textures that have not been used for a while */
