@@ -73,6 +73,11 @@ static const struct config_setting config_settings[] =
 	{ "display.screen_width", _config_integer, "0", "HALO_SCREEN_WIDTH", _environment_value, _platform_android,
 		"Columns of the 480-line picture: 0 for the display's shape, 640 for the\n"
 		"Xbox's 4:3." },
+	{ "display.render_scale", _config_real, "2.0", "HALO_RENDER_SCALE", _environment_value, _platform_android,
+		"How many pixels the screen is drawn with, per line of the 480-line\n"
+		"picture: 1.0 draws 480 lines and the display scales them up, 2.0 draws\n"
+		"960 (sharper, and the texture pack shows, but the GPU draws four times\n"
+		"the pixels; 1.5 draws 720 if 960 is too much). From 1.0 to 3.0." },
 	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_all,
 		"Wait for the display between frames; false draws as fast as possible." },
 	{ "display.interpolation", _config_boolean, "true", "HALO_INTERPOLATION", _environment_value, _platform_all,

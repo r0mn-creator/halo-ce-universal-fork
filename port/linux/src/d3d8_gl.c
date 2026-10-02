@@ -97,7 +97,11 @@ static void screen_mode_choose(long *width, float scale[2])
 	if (*width > 1600)
 		*width = 1600;
 	*width &= ~1L;
-	scale[0] = scale[1] = 1.0f;
+	scale[0] = scale[1] = (float)config_real("display.render_scale");
+	if (scale[0] < 1.0f)
+		scale[0] = scale[1] = 1.0f;
+	if (scale[0] > 3.0f)
+		scale[0] = scale[1] = 3.0f;
 #else
 	long display_width, display_height;
 
