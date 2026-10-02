@@ -31,4 +31,8 @@ when the pack was switched or reloaded, and every bitmap has to be looked up
 again */
 int texture_pack_control_poll(void);
 
+/* the pad's Back button: switches between the pack and the maps' own bitmaps
+at the start of the next frame (safe to call from any thread) */
+void texture_pack_request_toggle(void);
+
 #endif

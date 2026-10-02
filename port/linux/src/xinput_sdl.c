@@ -35,6 +35,7 @@ drive the controller.
 #include "platform.h"
 #include "sdl_platform.h"
 #include "port_config.h"
+#include "texture_pack.h"
 
 #include <SDL3/SDL.h>
 #include <math.h>
@@ -413,6 +414,15 @@ static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 	{
 		if (SDL_GetGamepadButton(gamepad, digital[index].button))
 			pad->wButtons |= digital[index].mask;
+	}
+	/* Back (Select) also switches the texture pack on and off, on the press */
+	{
+		static BOOL back_was_down;
+		BOOL back_down = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_BACK) != 0;
+
+		if (back_down && !back_was_down)
+			texture_pack_request_toggle();
+		back_was_down = back_down;
 	}
 	merge_button(pad, XINPUT_GAMEPAD_A, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH));
 	merge_button(pad, XINPUT_GAMEPAD_B, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST));

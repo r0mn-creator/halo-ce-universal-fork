@@ -261,6 +261,16 @@ static void forget_everything(void)
 	initialized = 0;
 }
 
+/* the pad's Back button asks for this from the input code, which is not
+necessarily the thread that owns the GL context: the flip itself happens at
+the start of the next frame */
+static volatile int toggle_requested;
+
+void texture_pack_request_toggle(void)
+{
+	toggle_requested = 1;
+}
+
 int texture_pack_control_poll(void)
 {
 	static unsigned long calls;
@@ -269,6 +279,16 @@ int texture_pack_control_poll(void)
 	size_t length;
 	FILE *file;
 
+	if (toggle_requested)
+	{
+		int now = runtime_enabled >= 0 ? runtime_enabled : config_boolean("display.texture_pack");
+
+		toggle_requested = 0;
+		runtime_enabled = !now;
+		platform_log("texture pack: switched %s with the pad's Back button", runtime_enabled ? "on" : "off");
+		forget_everything();
+		return 1;
+	}
 	if (++calls % 30)
 		return 0;
 	pack_path(path, sizeof(path), "control.txt");
