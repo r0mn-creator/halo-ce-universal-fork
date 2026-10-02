@@ -125,6 +125,11 @@ def policy(name: str, usage: int, bitmap: dict) -> str:
         return "skip:format"
     if usage in (2, 4, 5):
         return "skip:" + USAGES[usage]
+    # a detail map is fine grit the shader multiplies over a surface, tiled many
+    # times: the network reads that grit as noise and smooths it away (and
+    # lightens it), which shows as a pattern across every wall that uses it
+    if usage == 3:
+        return "skip:detail"
     lowered = name.lower()
     if any(word in lowered for word in DATA_WORDS):
         return "skip:name"
@@ -328,20 +333,40 @@ def validate(arguments) -> None:
     print(len(bad), "bad results" + (" deleted" if arguments.delete else ""))
 
 
+def match_colour(source: Image.Image, result: Image.Image) -> Image.Image:
+    """The result with each colour channel scaled so that its average, over the
+    texels that show, is the source's: the network shifts the overall tone of
+    some textures, and a few percent of that on a surface the shader also
+    multiplies by a detail map is plainly visible."""
+    source = np.asarray(source.convert("RGBA"), np.float32)
+    shrunk = np.asarray(result.convert("RGBA").resize(source.shape[1::-1], Image.BOX), np.float32)
+    visible = source[..., 3] > 16
+    out = np.asarray(result.convert("RGBA"), np.float32).copy()
+    if visible.any():
+        for channel in range(3):
+            have, want = shrunk[..., channel][visible].mean(), source[..., channel][visible].mean()
+            if have > 1.0:
+                out[..., channel] = np.clip(out[..., channel] * (want / have), 0, 255)
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
+
+
 def pack(arguments) -> None:
     work, out = Path(arguments.work), Path(arguments.out)
     out.mkdir(parents=True, exist_ok=True)
-    count = 0
+    index = json.loads((work / "index.json").read_text())
+    count = skipped = 0
     for path in sorted((work / "up").glob("*.png")):
-        if arguments.prefix:
-            index = json.loads((work / "index.json").read_text())
-            if not any(tag.startswith(arguments.prefix) for tag in index[path.stem]["tags"]):
-                continue
-        shutil.copyfile(path, out / path.name)
+        entry = index.get(path.stem)
+        if not entry or entry["verdict"] != "upscale":
+            skipped += 1
+            continue
+        if arguments.prefix and not any(tag.startswith(arguments.prefix) for tag in entry["tags"]):
+            continue
+        match_colour(Image.open(work / "src" / path.name), Image.open(path)).save(out / path.name)
         count += 1
     names = sorted(path.stem for path in out.glob("*.png"))
     (out / "index.txt").write_text("".join(name + "\n" for name in names))
-    print(count, "textures in", out, "(index.txt lists", len(names), ")")
+    print(count, "textures in", out, "(%d upscaled ones left out: no longer meant for upscaling)" % skipped)
 
 
 def main() -> None:
