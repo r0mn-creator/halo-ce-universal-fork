@@ -27,8 +27,13 @@ public class HaloActivity extends SDLActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         preferHighestRefreshRate();
         acquireMulticastLock();
+        // DISABLED in this fork: the self-updater asks GitHub for the upstream project's
+        // latest build (Updater.REPOSITORY is cybersecurity/halo-ce-universal) and offers to
+        // install it, which would replace this fork's build with the upstream's, and
+        // would fail anyway since the signing keys differ. Updater.java is kept as it was;
+        // uncomment the call (and point REPOSITORY at this fork's releases) to bring it back.
         // a new version looked for while the game starts
-        Updater.start(this);
+        // Updater.start(this);
     }
 
     @Override
