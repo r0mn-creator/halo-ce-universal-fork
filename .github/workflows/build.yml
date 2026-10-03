@@ -221,7 +221,10 @@ jobs:
     # latest/download links); then all but the newest five build-* releases
     # go, tags and all. Only for main, and only when every platform built.
     needs: [linux, android, windows]
-    if: ${{ github.ref == 'refs/heads/main' }}
+    # DISABLED in this fork: its Releases page holds the APKs published by hand, and a
+    # build-N release marked Latest on every push would bury them. Builds still run and
+    # keep their artifacts. To bring the releases back, drop `false &&` below.
+    if: ${{ false && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
