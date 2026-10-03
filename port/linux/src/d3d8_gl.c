@@ -25,6 +25,7 @@ Conventions carried over from the Xbox:
 #include "sdl_platform.h"
 #include "halo_ui_pointer.h"
 #include "port_config.h"
+#include "game_menu.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -97,7 +98,8 @@ static void screen_mode_choose(long *width, float scale[2])
 	if (*width > 1600)
 		*width = 1600;
 	*width &= ~1L;
-	scale[0] = scale[1] = (float)config_real("display.render_scale");
+	/* the graphics menu's resolution row (game_menu.h; it starts from display.render_scale) */
+	scale[0] = scale[1] = game_menu_render_scale();
 	if (scale[0] < 1.0f)
 		scale[0] = scale[1] = 1.0f;
 	if (scale[0] > 3.0f)
@@ -2007,6 +2009,10 @@ static void configure_sampler(int stage, BOOL mipmapped, BOOL hires)
 	DWORD mag_filter = hires ? D3DTEXF_LINEAR : state[D3DTSS_MAGFILTER];
 	DWORD maximum_mip_level = hires ? 0 : state[D3DTSS_MAXMIPLEVEL];
 	DWORD lod_bias = hires ? 0 : state[D3DTSS_MIPMAPLODBIAS];
+	/* the game asks for anisotropic filtering only now and then; the graphics menu can
+	ask for it for every texture that is filtered at all (and has mip levels to choose) */
+	DWORD anisotropy = (min_filter == D3DTEXF_ANISOTROPIC && state[D3DTSS_MAXANISOTROPY] > 1) ?
+		state[D3DTSS_MAXANISOTROPY] : 1;
 	GLenum minification;
 	float border[4];
 	DWORD inputs[11];
@@ -2019,7 +2025,9 @@ static void configure_sampler(int stage, BOOL mipmapped, BOOL hires)
 	inputs[5] = state[D3DTSS_ADDRESSW];
 	inputs[6] = lod_bias;
 	inputs[7] = maximum_mip_level;
-	inputs[8] = state[D3DTSS_MAXANISOTROPY];
+	if ((DWORD)game_menu_anisotropy() > anisotropy && min_filter != D3DTEXF_POINT && mipmapped)
+		anisotropy = (DWORD)game_menu_anisotropy();
+	inputs[8] = anisotropy;
 	inputs[9] = state[D3DTSS_BORDERCOLOR];
 	inputs[10] = hires;
 	if (configured_valid[stage] && !memcmp(configured[stage], inputs, sizeof(inputs)))
@@ -2043,8 +2051,7 @@ static void configure_sampler(int stage, BOOL mipmapped, BOOL hires)
 	(texture_lod_bias) */
 	glSamplerParameterf(sampler, GL_TEXTURE_MIN_LOD, (float)maximum_mip_level);
 	if (xgpu_capabilities.anisotropy)
-		glSamplerParameterf(sampler, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-			(min_filter == D3DTEXF_ANISOTROPIC && state[D3DTSS_MAXANISOTROPY] > 1) ? (float)state[D3DTSS_MAXANISOTROPY] : 1.0f);
+		glSamplerParameterf(sampler, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy);
 	if (xgpu_capabilities.border_clamp)
 	{
 		color_to_vec4(state[D3DTSS_BORDERCOLOR], border);
@@ -3661,6 +3668,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		/* row 0 of the render target is the top of the picture */
 		glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
 			x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+		game_menu_draw(window_width, window_height);
 		platform_video_swap();
 		xgpu_gl_state_invalidate();
 		xgpu_texture_cache_begin_frame();

@@ -13,6 +13,7 @@ and the debug keyboard that the game's console reads.
 #include "sdl_platform.h"
 #include "gl.h"
 #include "port_config.h"
+#include "game_menu.h"
 #include "p2p.h"
 #include "xiso.h"
 
@@ -833,6 +834,18 @@ void platform_pump_events(void)
 				platform_mouse_capture(TRUE);
 #endif
 			break;
+#ifdef HALO_ANDROID
+		case SDL_EVENT_FINGER_DOWN:
+		{
+			/* a tap goes to the graphics menu while it is open (game_menu.h); touch
+			otherwise does nothing in the game */
+			int drawable_width, drawable_height;
+
+			platform_video_drawable_size(&drawable_width, &drawable_height);
+			game_menu_touch(event.tfinger.x * (float)drawable_width, event.tfinger.y * (float)drawable_height);
+			break;
+		}
+#endif
 		case SDL_EVENT_GAMEPAD_ADDED:
 			SDL_OpenGamepad(event.gdevice.which);
 			break;

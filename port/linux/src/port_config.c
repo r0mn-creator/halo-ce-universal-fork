@@ -248,6 +248,8 @@ static const struct config_setting config_settings[] =
 		"Save every this many frames to screenshot_directory; 0 none." },
 	{ "debug.texture_dump_directory", _config_string, "\"\"", "HALO_TEXTURE_DUMP", _environment_value, _platform_all,
 		"A folder to write every texture to as it is uploaded; empty none." },
+	{ "debug.game_menu_open", _config_boolean, "false", "HALO_GAME_MENU_OPEN", _environment_set_is_true, _platform_android,
+		"Open the graphics menu when the game starts (for screenshots)." },
 	{ "debug.texture_log", _config_boolean, "false", "HALO_TEXTURE_LOG", _environment_set_is_true, _platform_all,
 		"Log texture uploads." },
 	{ "debug.texture_no_cache", _config_boolean, "false", "HALO_TEXTURE_NO_CACHE", _environment_set_is_true, _platform_all,

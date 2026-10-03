@@ -271,6 +271,11 @@ void texture_pack_request_toggle(void)
 	toggle_requested = 1;
 }
 
+int texture_pack_is_enabled(void)
+{
+	return runtime_enabled >= 0 ? runtime_enabled : config_boolean("display.texture_pack");
+}
+
 int texture_pack_control_poll(void)
 {
 	static unsigned long calls;

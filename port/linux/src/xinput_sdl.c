@@ -35,7 +35,7 @@ drive the controller.
 #include "platform.h"
 #include "sdl_platform.h"
 #include "port_config.h"
-#include "texture_pack.h"
+#include "game_menu.h"
 
 #include <SDL3/SDL.h>
 #include <math.h>
@@ -408,6 +408,7 @@ static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 	};
 	int index;
 	int left_trigger, right_trigger;
+	int menu_has_pad;
 	SHORT value;
 
 	for (index = 0; index < (int)(sizeof(digital) / sizeof(digital[0])); index++)
@@ -415,15 +416,12 @@ static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 		if (SDL_GetGamepadButton(gamepad, digital[index].button))
 			pad->wButtons |= digital[index].mask;
 	}
-	/* Back (Select) also switches the texture pack on and off, on the press */
-	{
-		static BOOL back_was_down;
-		BOOL back_down = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_BACK) != 0;
-
-		if (back_down && !back_was_down)
-			texture_pack_request_toggle();
-		back_was_down = back_down;
-	}
+	/* Back (Select) opens the graphics menu (game_menu.h), which then has the
+	pad: the game is shown it neutral */
+	menu_has_pad = game_menu_pad(SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_BACK),
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP), SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN),
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT), SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT),
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH), SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST));
 	merge_button(pad, XINPUT_GAMEPAD_A, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH));
 	merge_button(pad, XINPUT_GAMEPAD_B, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST));
 	merge_button(pad, XINPUT_GAMEPAD_X, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST));
@@ -448,6 +446,8 @@ static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 	if (abs(value) > abs(pad->sThumbRX)) pad->sThumbRX = value;
 	value = stick(SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHTY), TRUE);
 	if (abs(value) > abs(pad->sThumbRY)) pad->sThumbRY = value;
+	if (menu_has_pad)
+		memset(pad, 0, sizeof(*pad));
 }
 
 /* ---------- XAPI */
