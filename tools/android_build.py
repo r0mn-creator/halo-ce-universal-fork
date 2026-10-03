@@ -33,6 +33,15 @@ from .embed_assets import hud_assets_build, hud_configure_inputs
 from .ninja_syntax import Writer
 
 PORT_DIR = Path("port/android")
+
+# The compiler writes the path of every source file into the code it makes (the text of
+# __FILE__, the debug information), which would put the build machine's user name and
+# folders into a published APK. These write the folder the build runs in as "." and the
+# rest of the home folder as /home/builder instead. (The later of two matching maps wins.)
+PATH_MAP_FLAGS = [
+    f"-ffile-prefix-map={Path.home()}=/home/builder",
+    f"-ffile-prefix-map={Path.cwd()}=.",
+]
 LINUX_DIR = Path("port/linux")
 BUILD = Path("build/android")
 THIRD_PARTY = BUILD / "third_party"
@@ -474,6 +483,7 @@ def generate_android_build(n: Writer, sln: Any) -> None:
                  f"-DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF "
                  # 16 KB pages (Android 15 and later), as the host library
                  f"-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384 "
+                 f"-DCMAKE_C_FLAGS=\"{' '.join(PATH_MAP_FLAGS)}\" -DCMAKE_CXX_FLAGS=\"{' '.join(PATH_MAP_FLAGS)}\" "
                  f"> {BUILD}/sdl3-configure.log && ninja -C {sdl_build} > {BUILD}/sdl3-build.log"),
         description="ANDROID SDL3",
         pool="console",
@@ -492,7 +502,7 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         deps="gcc",
     )
     host_cflags = " ".join([
-        "-O2", "-g", "-fPIC", "-Wall", "-Wno-unused-function", "-D_GNU_SOURCE",
+        "-O2", "-g", "-fPIC", "-Wall", "-Wno-unused-function", "-D_GNU_SOURCE", *PATH_MAP_FLAGS,
         f"-I{PORT_DIR}/include", f"-I{PORT_DIR}/host", f"-I{SDL_DIR}/include", f"-I{LINUX_DIR}/src",
         f"-I{TOML_DIR}",
     ])
