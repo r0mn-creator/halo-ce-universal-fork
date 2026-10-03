@@ -1,5 +1,15 @@
 # Halo: Combat Evolved for Linux, Windows and Android
 
+> **This is a fork** of [cybersecurity/halo-ce-universal](https://github.com/cybersecurity/halo-ce-universal),
+> aimed at the Android build. The [Releases](../../releases) page here has its APK. What it
+> adds: a **graphics menu** (Select) with resolution, anisotropic filtering, FXAA and a
+> texture-pack switch; support for a **texture pack** and a tool to make one; a fix for
+> "cannot reserve the Xbox memory window" on release builds; and the self-update check
+> turned off, since it would offer the upstream's builds. See
+> [port/android/README.md](port/android/README.md). Everything else is the upstream's
+> work, and the download table and update notes below describe the upstream's builds, not
+> this fork's. Not affiliated with the upstream. Same licence (CC0).
+
 [![Join our Discord](https://invidget.switchblade.xyz/9gqcHyr5km)](https://discord.gg/9gqcHyr5km)
 
 This project is a port of the Halo: Combat Evolved decompilation to Linux,
