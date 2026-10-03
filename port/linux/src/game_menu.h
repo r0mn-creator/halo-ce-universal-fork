@@ -30,5 +30,10 @@ void game_menu_draw(int window_width, int window_height);
 /* what the renderer reads from the menu's settings */
 float game_menu_render_scale(void);
 int game_menu_anisotropy(void);
+/* the last pass of a frame: draws the game's picture (a texture) into the window's
+rectangle through anti-aliasing (FXAA); 0 if it is off and the caller copies the picture
+as it always did */
+int game_menu_post_draw(unsigned int source_texture, int x, int y, int width, int height,
+	int window_width, int window_height);
 
 #endif

@@ -310,6 +310,37 @@ assembly of the port is necessary:
 - The device must let the app reserve the fixed guest addresses, from
   `0x80000000` to approximately `0x89000000`. If the addresses are not
   available, the app shows a message.
-- The game does not accept touch input. Use a controller or a keyboard.
+- The game itself does not accept touch input; use a controller or a keyboard. Touch only
+  works in the graphics menu (below).
 - Kernels with 16 KB pages (a developer option of Android 15) do not
   operate. The Xbox memory uses 4 KB pages.
+
+## Graphics menu, texture pack and defaults
+
+**Select (Back) opens a graphics panel** that slides in from the right (a quarter of the
+screen at most). D-pad moves, left/right or A changes a row, B or Select closes it, and
+a tap does the same by touch (tap a row, or outside the panel to close). While it is open
+the game sees no input. Rows: texture pack (on/off), resolution (480p, 720p, 960p,
+1080p), anisotropic filter (off to x16), anti-aliasing (off/FXAA) and colour grade (off
+and four grades). Changes apply at once.
+
+Where it starts (all in `config.toml`, which the game writes with these when it is missing):
+
+| key | default |
+| --- | --- |
+| `display.render_scale` | `1.5` (720p; `2.0` is 960p) |
+| `display.anisotropy` | `2` |
+| `display.fxaa` | `true` |
+| `display.color_grade` | `0` (off) |
+| `display.texture_pack` | `true` |
+
+**Texture pack.** A folder `texture_pack/` in the data folder holds replacement textures
+as `<crc>.png` plus an `index.txt`; a bitmap is found by the CRC-32 of its first mip level
+as the map holds it, so no tag names are involved, and a bitmap the pack does not have
+is drawn as it is. `tools/texture_pack.py` makes one (`extract`, `upscale`, `pack`). The
+pack is not part of the repository or the app. `texture_pack/control.txt` switches it
+while the game runs: write `off`, `on`, or `on 2` (any change to the line re-reads the
+folder), which is how new textures are tried with no rebuild.
+
+True MSAA is not offered: the engine reads its screen targets back during a frame, and
+multisampled render-to-texture on them breaks the picture. FXAA runs as the last pass.

@@ -33,6 +33,11 @@ int game_menu_touch(float x, float y) { (void)x; (void)y; return 0; }
 void game_menu_draw(int window_width, int window_height) { (void)window_width; (void)window_height; }
 float game_menu_render_scale(void) { return 1.0f; }
 int game_menu_anisotropy(void) { return 1; }
+int game_menu_post_draw(unsigned int source_texture, int x, int y, int width, int height, int window_width, int window_height)
+{
+	(void)source_texture; (void)x; (void)y; (void)width; (void)height; (void)window_width; (void)window_height;
+	return 0;
+}
 
 #else
 
@@ -57,17 +62,16 @@ static const char *const resolution_names[] = { "480p", "720p", "960p", "1080p" 
 static const float resolution_scales[] = { 1.0f, 1.5f, 2.0f, 2.25f };
 static const char *const anisotropy_names[] = { "Off", "x2", "x4", "x8", "x16" };
 static const int anisotropy_levels[] = { 1, 2, 4, 8, 16 };
-static const char *const soon_names[] = { "Soon" };
+static const char *const antialiasing_names[] = { "Off", "FXAA" };
 
-enum { ROW_TEXTURE_PACK, ROW_RESOLUTION, ROW_ANISOTROPY, ROW_MSAA, ROW_LUT, ROW_COUNT };
+enum { ROW_TEXTURE_PACK, ROW_RESOLUTION, ROW_ANISOTROPY, ROW_ANTIALIASING, ROW_COUNT };
 
 static struct row rows[ROW_COUNT] =
 {
 	{ "Texture pack", _row_toggle, NULL, 2, 0 },
 	{ "Resolution", _row_choice, resolution_names, 4, 2 },
 	{ "Anisotropic", _row_choice, anisotropy_names, 5, 0 },
-	{ "MSAA", _row_unavailable, soon_names, 1, 0 },
-	{ "Color grade (LUT)", _row_unavailable, soon_names, 1, 0 },
+	{ "Anti-aliasing", _row_choice, antialiasing_names, 2, 0 },
 };
 
 static int initialized;
@@ -97,6 +101,19 @@ static void initialize(void)
 		}
 	}
 	rows[ROW_RESOLUTION].value = best;
+	/* the settings the menu starts from (config.toml's display.*) */
+	{
+		int wanted = (int)config_integer("display.anisotropy");
+
+		best = 0;
+		for (index = 0; index < 5; index++)
+		{
+			if (anisotropy_levels[index] <= wanted)
+				best = index;
+		}
+		rows[ROW_ANISOTROPY].value = best;
+		rows[ROW_ANTIALIASING].value = config_boolean("display.fxaa") ? 1 : 0;
+	}
 }
 
 float game_menu_render_scale(void)
@@ -547,6 +564,135 @@ void game_menu_draw(int window_width, int window_height)
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glDisable(GL_BLEND);
 	xgpu_gl_state_invalidate();
+}
+
+/* ---------- anti-aliasing: the last pass of a frame */
+
+static GLuint post_program;
+static GLint post_size_uniform, post_source_uniform;
+static int post_failed;
+
+static int post_initialize(void)
+{
+	static const char *vertex_source =
+		"#version 300 es\n"
+		"layout(location = 0) in vec2 a_position;\n"
+		"layout(location = 1) in vec2 a_uv;\n"
+		"uniform vec2 u_size;\n"
+		"out vec2 v_uv;\n"
+		"void main() {\n"
+		"    vec2 c = a_position / u_size;\n"
+		"    gl_Position = vec4(c.x * 2.0 - 1.0, 1.0 - c.y * 2.0, 0.0, 1.0);\n"
+		"    v_uv = a_uv;\n"
+		"}\n";
+	/* FXAA (Lottes' first version): the edge's direction is read from the luma of the
+	pixel's four diagonal neighbours, and the pixel is averaged along it; a step that
+	would leave the neighbourhood's range falls back to the narrower blend */
+	static const char *fragment_source =
+		"#version 300 es\n"
+		"precision highp float;\n"
+		"in vec2 v_uv;\n"
+		"uniform sampler2D u_source;\n"
+		"out vec4 o_color;\n"
+		"const vec3 LUMA = vec3(0.299, 0.587, 0.114);\n"
+		"void main() {\n"
+		"    vec2 texel = 1.0 / vec2(textureSize(u_source, 0));\n"
+		"    vec3 nw = texture(u_source, v_uv + vec2(-1.0, -1.0) * texel).rgb;\n"
+		"    vec3 ne = texture(u_source, v_uv + vec2( 1.0, -1.0) * texel).rgb;\n"
+		"    vec3 sw = texture(u_source, v_uv + vec2(-1.0,  1.0) * texel).rgb;\n"
+		"    vec3 se = texture(u_source, v_uv + vec2( 1.0,  1.0) * texel).rgb;\n"
+		"    vec3 m = texture(u_source, v_uv).rgb;\n"
+		"    float lnw = dot(nw, LUMA), lne = dot(ne, LUMA), lsw = dot(sw, LUMA), lse = dot(se, LUMA), lm = dot(m, LUMA);\n"
+		"    float lmin = min(lm, min(min(lnw, lne), min(lsw, lse)));\n"
+		"    float lmax = max(lm, max(max(lnw, lne), max(lsw, lse)));\n"
+		"    vec2 dir = vec2(-((lnw + lne) - (lsw + lse)), (lnw + lsw) - (lne + lse));\n"
+		"    float reduce = max((lnw + lne + lsw + lse) * (0.25 / 8.0), 1.0 / 128.0);\n"
+		"    float scale = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);\n"
+		"    dir = clamp(dir * scale, vec2(-8.0), vec2(8.0)) * texel;\n"
+		"    vec3 a = 0.5 * (texture(u_source, v_uv + dir * (1.0 / 3.0 - 0.5)).rgb + texture(u_source, v_uv + dir * (2.0 / 3.0 - 0.5)).rgb);\n"
+		"    vec3 b = a * 0.5 + 0.25 * (texture(u_source, v_uv + dir * -0.5).rgb + texture(u_source, v_uv + dir * 0.5).rgb);\n"
+		"    float lb = dot(b, LUMA);\n"
+		"    o_color = vec4((lb < lmin || lb > lmax) ? a : b, 1.0);\n"
+		"}\n";
+	GLuint vertex_shader = compile(GL_VERTEX_SHADER, vertex_source);
+	GLuint fragment_shader = compile(GL_FRAGMENT_SHADER, fragment_source);
+
+	if (!vertex_shader || !fragment_shader)
+		return 0;
+	post_program = glCreateProgram();
+	glAttachShader(post_program, vertex_shader);
+	glAttachShader(post_program, fragment_shader);
+	glLinkProgram(post_program);
+	glDeleteShader(vertex_shader);
+	glDeleteShader(fragment_shader);
+	post_size_uniform = glGetUniformLocation(post_program, "u_size");
+	post_source_uniform = glGetUniformLocation(post_program, "u_source");
+	if (!vertex_array)
+		glGenVertexArrays(1, &vertex_array);
+	if (!vertex_buffer)
+		glGenBuffers(1, &vertex_buffer);
+	return 1;
+}
+
+int game_menu_post_draw(unsigned int source_texture, int x, int y, int width, int height,
+	int window_width, int window_height)
+{
+	float top, left = (float)x, right = (float)(x + width), bottom, quad_vertices[6 * 4];
+	static const float corner[6][2] = { {0, 0}, {1, 0}, {0, 1}, {1, 0}, {1, 1}, {0, 1} };
+	int corner_index;
+
+	if (rows[ROW_ANTIALIASING].value != 1 || post_failed)
+		return 0;
+	if (!post_program && !post_initialize())
+	{
+		post_failed = 1;
+		return 0;
+	}
+	/* the window's rows count from the bottom, the menu's from the top */
+	top = (float)(window_height - (y + height));
+	bottom = top + (float)height;
+	for (corner_index = 0; corner_index < 6; corner_index++)
+	{
+		quad_vertices[corner_index * 4 + 0] = corner[corner_index][0] ? right : left;
+		quad_vertices[corner_index * 4 + 1] = corner[corner_index][1] ? bottom : top;
+		/* row 0 of the game's render target is the top of the picture */
+		quad_vertices[corner_index * 4 + 2] = corner[corner_index][0];
+		quad_vertices[corner_index * 4 + 3] = corner[corner_index][1];
+	}
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glViewport(0, 0, window_width, window_height);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_STENCIL_TEST);
+	glDisable(GL_BLEND);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glUseProgram(post_program);
+	glUniform2f(post_size_uniform, (float)window_width, (float)window_height);
+	glUniform1i(post_source_uniform, 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindSampler(0, 0);
+	glBindTexture(GL_TEXTURE_2D, source_texture);
+	/* the game's own samplers set this texture's filtering when it is drawn with; here it is
+	read with the texture's own, which must be a plain linear one with no mip levels */
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindVertexArray(vertex_array);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+	glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)sizeof(quad_vertices), quad_vertices, GL_STREAM_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)(2 * sizeof(float)));
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	xgpu_gl_state_invalidate();
+	return 1;
 }
 
 #endif
