@@ -321,8 +321,8 @@ assembly of the port is necessary:
 screen at most). D-pad moves, left/right or A changes a row, B or Select closes it, and
 a tap does the same by touch (tap a row, or outside the panel to close). While it is open
 the game sees no input. Rows: texture pack (on/off), resolution (480p, 720p, 960p,
-1080p), anisotropic filter (off to x16), anti-aliasing (off/FXAA) and colour grade (off
-and four grades). Changes apply at once.
+1080p), anisotropic filter (off to x16) and anti-aliasing (off/FXAA). Changes apply at
+once.
 
 Where it starts (all in `config.toml`, which the game writes with these when it is missing):
 
@@ -331,7 +331,6 @@ Where it starts (all in `config.toml`, which the game writes with these when it 
 | `display.render_scale` | `1.5` (720p; `2.0` is 960p) |
 | `display.anisotropy` | `2` |
 | `display.fxaa` | `true` |
-| `display.color_grade` | `0` (off) |
 | `display.texture_pack` | `true` |
 
 **Texture pack.** A folder `texture_pack/` in the data folder holds replacement textures
@@ -344,3 +343,8 @@ folder), which is how new textures are tried with no rebuild.
 
 True MSAA is not offered: the engine reads its screen targets back during a frame, and
 multisampled render-to-texture on them breaks the picture. FXAA runs as the last pass.
+
+**No self-update.** The upstream build asks GitHub for a newer release when the game
+starts. This fork does not (the call in `HaloActivity.onCreate` is commented out, and
+`Updater.java` is untouched), since the release it would find is the upstream's, not
+this fork's. Update by installing a newer APK signed with the same key.
